@@ -1,0 +1,34 @@
+[project]
+name = "diagram-military-pipeline"
+version = "0.1.0"
+description = "Plan1-based mechanical drawing pipeline with hard gate enforcement."
+requires-python = ">=3.11"
+dependencies = [
+  "cairosvg>=2.7",
+  "drawsvg>=2.4",
+  "ezdxf>=1.3",
+  "numpy>=1.26",
+  "opencv-python>=4.9",
+  "pillow>=10.0",
+  "pydantic>=2.6",
+  "pytest>=8.0",
+  "shapely>=2.0"
+]
+
+[project.optional-dependencies]
+ocr = [
+  "paddleocr>=2.7",
+  "pytesseract>=0.3"
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q -p no:cacheprovider"
+
+[tool.ruff]
+line-length = 100
+
+[tool.setuptools.packages.find]
+include = ["core", "core.*"]
+exclude = ["work*", "result*", "input_images*", "docs*", "config*", "tests*"]

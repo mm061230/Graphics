@@ -1,0 +1,8 @@
+services:
+  diagram:
+    build: .
+    working_dir: /app
+    volumes:
+      - .:/app
+    command: python run_task.py --help
+

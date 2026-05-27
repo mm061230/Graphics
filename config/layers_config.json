@@ -1,0 +1,49 @@
+{
+  "render_order": [
+    "CENTERLINE",
+    "HATCH_LINE",
+    "HIDDEN_OUTLINE",
+    "VISIBLE_OUTLINE",
+    "WAVE_LINE",
+    "TEXT_SYMBOL"
+  ],
+  "layers": {
+    "VISIBLE_OUTLINE": {
+      "description": "Thick visible outline",
+      "stroke": "#000000",
+      "width": 2.5,
+      "dash": []
+    },
+    "HIDDEN_OUTLINE": {
+      "description": "Thin hidden outline",
+      "stroke": "#333333",
+      "width": 0.8,
+      "dash": [4, 2]
+    },
+    "CENTERLINE": {
+      "description": "Thin chain center line",
+      "stroke": "#ff0000",
+      "width": 0.8,
+      "dash": [16, 3, 2, 3]
+    },
+    "HATCH_LINE": {
+      "description": "Thin hatch line",
+      "stroke": "#555555",
+      "width": 0.6,
+      "dash": []
+    },
+    "WAVE_LINE": {
+      "description": "Thin local section wave line",
+      "stroke": "#0000ff",
+      "width": 0.6,
+      "dash": []
+    },
+    "TEXT_SYMBOL": {
+      "description": "Text and section symbols",
+      "stroke": "#000000",
+      "width": 0.6,
+      "dash": []
+    }
+  }
+}
+
