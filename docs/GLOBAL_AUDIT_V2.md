@@ -1,13 +1,13 @@
 # Global Audit V2
 
-Date: 2026-05-27
+Date: 2026-05-28
 
 ## Version Line
 
 - Baseline commit: `a2ed8f5 baseline military diagram pipeline`
 - Baseline tag: `v1.0.0`
-- Active next-version branch: `v2/global-audit`
-- Push status: blocked by missing remote and missing GitHub authentication.
+- Publish branch: `main`
+- Push status: clean code-only snapshot pushed to `origin/main`.
 
 ## Design Contract Checked
 
@@ -171,16 +171,46 @@ Regression:
 - `tests/test_task_runner.py` now asserts per-package result directories and staging cleanup.
 - `tests/test_release_manifest.py` and `tests/test_cli.py` verify manifests at package-directory paths.
 
+### Finding 9: Release Pytest Evidence Depended on Caller Working Directory
+
+Status: fixed.
+
+Previous behavior:
+
+- `run_from_geometry` launched `python -m pytest` from the caller's current working directory.
+- If the CLI or runner was invoked outside the repository root, release evidence could point at the wrong test scope or fail for environment reasons unrelated to the project.
+
+Correction:
+
+- `core.task_runner` now resolves a stable `PROJECT_ROOT`.
+- Release-time pytest execution now runs from `PROJECT_ROOT`.
+- The subprocess also receives `PYTHONPATH=PROJECT_ROOT` so the audited code path matches the repository under release.
+
+Regression:
+
+- `tests/test_task_runner.py` now asserts release-time pytest runs from `PROJECT_ROOT`.
+
+### Finding 10: Publish Scope Needed a Regression Barrier
+
+Status: fixed.
+
+Previous behavior:
+
+- `.gitignore` and manual cleanup removed `_ref/`, `result/`, `work/`, and other local-only assets from publish history.
+- There was no automated regression preventing those directories from being tracked again in a future commit.
+
+Correction:
+
+- Repository hygiene is now enforced by test.
+- The test audits `git ls-files` and rejects tracked paths under `_ref/`, `input_images/`, `output_results/`, `result/`, and `work/`.
+
+Regression:
+
+- `tests/test_repository_hygiene.py` fails if local runtime assets re-enter publish history.
+
 ## Current Validation
 
 ```text
 .venv\Scripts\python.exe -m pytest
-68 passed
+70 passed
 ```
-
-## Residual Push Blocker
-
-The local baseline commit exists, but push cannot proceed until both are true:
-
-- A remote such as `origin` is configured.
-- `gh auth status` reports an authenticated GitHub session, or an HTTPS/SSH remote is otherwise usable by local Git.

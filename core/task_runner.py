@@ -17,6 +17,8 @@ from core.release_manifest import write_release_manifest
 from core.task_state import TOKEN_SYSTEM_RELEASE_RENDER, TaskState
 from core.vision_pipeline import write_gate1_candidate_json
 
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
 
 @dataclass(frozen=True)
 class TaskRunResult:
@@ -174,11 +176,14 @@ def _run_release_tests(run_tests: bool) -> tuple[bool | None, str]:
         return None, "disabled by caller"
     if os.environ.get("PYTEST_CURRENT_TEST"):
         return None, "skipped inside pytest harness"
+    env = os.environ | {"PYTHONPATH": str(PROJECT_ROOT)}
     completed = subprocess.run(
         [sys.executable, "-m", "pytest"],
         text=True,
         capture_output=True,
         check=False,
+        cwd=PROJECT_ROOT,
+        env=env,
     )
     summary = (completed.stdout + completed.stderr).strip().splitlines()
     return completed.returncode == 0, summary[-1] if summary else "no pytest output"

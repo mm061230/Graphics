@@ -649,6 +649,26 @@ Each task has separate input, gate1, and final directories.
 Temporary release staging is cleaned after each release attempt.
 ```
 
+### 8.11 Publish Scope Hardening
+
+- [x] Audit publish history for local-only runtime directories.
+- [x] Rewrite `.gitignore` so `_ref/`, `input_images/`, `work/`, `result/`, and `output_results/` stay local-only.
+- [x] Move long-lived text references into `docs/references/`.
+- [x] Rebuild clean git history without images or generated outputs.
+- [x] Push clean code-only snapshot to `origin/main`.
+- [x] Fix release-time pytest execution to run from repository root.
+- [x] Add regression for repository publish-scope hygiene.
+- [x] Add regression for rooted release-time pytest execution.
+- [x] Update audit docs to reflect pushed clean publish state.
+
+Acceptance:
+
+```text
+Release-time pytest evidence is collected from the repository root.
+Git-tracked publish history excludes local runtime directories and images.
+Remote main contains the clean code-only snapshot.
+```
+
 ## Absolute Stop Rules
 
 - [x] Stop if final rendering is attempted before GATE 4.
@@ -662,7 +682,7 @@ Temporary release staging is cleaned after each release attempt.
 ## Current Test Baseline
 
 ```text
-2026-05-27
+2026-05-28
 .venv\Scripts\python -m pytest
-68 passed
+70 passed
 ```

@@ -1,6 +1,8 @@
 import json
+import subprocess
 from pathlib import Path
 
+from core.task_runner import PROJECT_ROOT
 from core.task_runner import run_image_gate_1
 from core.task_runner import run_from_geometry
 from core.task_state import (
@@ -114,3 +116,30 @@ def test_run_image_gate_1_writes_candidate_json_and_token(tmp_path: Path, monkey
 
     assert gate1_json.exists()
     assert TaskState("image_runner_case").has_token(TOKEN_GEOM_EXTRACT_PASS)
+
+
+def test_run_from_geometry_runs_release_pytest_from_project_root(tmp_path: Path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    payload = render_task().model_dump(mode="json")
+    geometry = tmp_path / "geometry.json"
+    geometry.write_text(json.dumps(payload), encoding="utf-8")
+    state = TaskState("rooted_pytest_case")
+    state.write_token(TOKEN_GEOM_EXTRACT_PASS)
+    state.write_token(TOKEN_PROJ_ALIGN_PASS)
+    state.write_token(TOKEN_TOPO_SECTION_PASS)
+
+    calls: list[dict] = []
+
+    def fake_subprocess_run(command, **kwargs):
+        calls.append({"command": command, "cwd": kwargs.get("cwd"), "env": kwargs.get("env")})
+        return subprocess.CompletedProcess(command, 0, stdout="ok\n1 passed\n", stderr="")
+
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+    monkeypatch.setattr("core.task_runner.subprocess.run", fake_subprocess_run)
+
+    result = run_from_geometry("rooted_pytest_case", geometry, output_root=Path("result"))
+
+    assert result.released
+    assert calls
+    assert calls[0]["cwd"] == PROJECT_ROOT
+    assert calls[0]["env"]["PYTHONPATH"] == str(PROJECT_ROOT)
