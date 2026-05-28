@@ -5,7 +5,7 @@ from pathlib import Path
 
 from core.quality_gate import run_gate_2_checks, run_gate_3_checks
 from core.release_manifest import verify_release_manifest
-from core.task_runner import run_from_geometry, run_image_gate_1
+from core.task_runner import prepare_two_task_page, run_from_geometry, run_image_gate_1
 from core.task_state import TaskState
 
 
@@ -18,6 +18,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--task-type", default="UNKNOWN", help="Known task type if available.")
     parser.add_argument("--geometry-json", type=Path, help="Validated geometry JSON for rendering.")
     parser.add_argument("--verify-manifest", type=Path, help="Verify an existing release manifest.")
+    parser.add_argument(
+        "--split-page-halves",
+        action="store_true",
+        help="Normalize a two-task landscape page and write task25/task26 inputs into result/<source>/.",
+    )
     parser.add_argument(
         "--output-root",
         type=Path,
@@ -51,6 +56,16 @@ def main() -> int:
     if args.verify_manifest:
         manifest = verify_release_manifest(args.verify_manifest)
         print(f"manifest_verified=True task_id={manifest['task_id']}")
+        return 0
+
+    if args.split_page_halves:
+        if not args.image:
+            parser.error("--split-page-halves requires --image")
+        prepared = prepare_two_task_page(args.image, output_root=args.output_root)
+        print(f"source_copy={prepared.source_copy}")
+        print(f"normalized_image={prepared.normalized_image}")
+        for task_input in prepared.task_inputs:
+            print(f"task_input={task_input}")
         return 0
 
     state = TaskState(args.task_id)

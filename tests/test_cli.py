@@ -189,3 +189,32 @@ def test_cli_gate_4_can_write_to_explicit_package_directory(tmp_path: Path, monk
     manifest = tmp_path / package_dir / "1 (1)_task25_final_release_manifest.json"
     assert manifest.exists()
     assert json.loads(manifest.read_text(encoding="utf-8"))["review_mark"]["exists"] is True
+
+
+def test_cli_can_prepare_two_task_page(tmp_path: Path, monkeypatch):
+    from tests.test_gate_1_input import create_sample_image
+
+    monkeypatch.chdir(tmp_path)
+    image = create_sample_image(tmp_path / "page.png")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "run_task.py"),
+            "--image",
+            str(image),
+            "--split-page-halves",
+        ],
+        cwd=tmp_path,
+        env=os.environ | {"PYTHONPATH": str(PROJECT_ROOT)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+    assert (tmp_path / "result/page/source/page.png").exists()
+    assert (tmp_path / "result/page/split/page_normalized.png").exists()
+    assert (tmp_path / "result/page/task25/input/page_task25.png").exists()
+    assert (tmp_path / "result/page/task26/input/page_task26.png").exists()
+    assert not (tmp_path / "result/page/split/page_task25.png").exists()

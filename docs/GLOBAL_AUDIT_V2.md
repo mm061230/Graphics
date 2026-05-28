@@ -212,5 +212,5 @@ Regression:
 
 ```text
 .venv\Scripts\python.exe -m pytest
-70 passed
+71 passed
 ```

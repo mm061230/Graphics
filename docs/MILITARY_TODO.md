@@ -684,5 +684,5 @@ Remote main contains the clean code-only snapshot.
 ```text
 2026-05-28
 .venv\Scripts\python -m pytest
-70 passed
+71 passed
 ```

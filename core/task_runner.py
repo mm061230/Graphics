@@ -15,7 +15,7 @@ from core.geometry_schema import TaskDocument
 from core.quality_gate import run_gate_1_checks, run_gate_2_checks, run_gate_3_checks, run_gate_4_checks
 from core.release_manifest import write_release_manifest
 from core.task_state import TOKEN_SYSTEM_RELEASE_RENDER, TaskState
-from core.vision_pipeline import write_gate1_candidate_json
+from core.vision_pipeline import split_landscape_page_halves, write_gate1_candidate_json
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,6 +26,50 @@ class TaskRunResult:
     released: bool
     outputs: list[Path]
     report: Path
+
+
+@dataclass(frozen=True)
+class PreparedPageResult:
+    source_copy: Path
+    normalized_image: Path
+    task_inputs: list[Path]
+
+
+def prepare_two_task_page(
+    image_path: Path,
+    output_root: Path = Path("result"),
+) -> PreparedPageResult:
+    source_stem = image_path.stem
+    package_root = output_root / source_stem
+    source_dir = package_root / "source"
+    split_dir = package_root / "split"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    split_dir.mkdir(parents=True, exist_ok=True)
+
+    source_copy = source_dir / image_path.name
+    shutil.copy2(image_path, source_copy)
+
+    stage_root = Path(tempfile.mkdtemp(prefix=f"diagram_split_{_safe_path_name(source_stem)}_"))
+    try:
+        split = split_landscape_page_halves(image_path, stage_root, output_stem=source_stem)
+        normalized_image = split_dir / split.normalized_image.name
+        shutil.copy2(split.normalized_image, normalized_image)
+
+        task_inputs: list[Path] = []
+        for task_index, split_image in enumerate(split.task_images, start=25):
+            task_dir = package_root / f"task{task_index}" / "input"
+            task_dir.mkdir(parents=True, exist_ok=True)
+            task_path = task_dir / split_image.name
+            shutil.copy2(split_image, task_path)
+            task_inputs.append(task_path)
+    finally:
+        shutil.rmtree(stage_root, ignore_errors=True)
+
+    return PreparedPageResult(
+        source_copy=source_copy,
+        normalized_image=normalized_image,
+        task_inputs=task_inputs,
+    )
 
 
 def run_from_geometry(
