@@ -175,6 +175,10 @@ def _detect_target_view(text: str) -> str | None:
 
 
 def extract_text_from_image(image_path: Path, languages: str = "chi_sim+eng") -> OCRResult:
+    paddle_result = _try_paddleocr(image_path)
+    if paddle_result is not None:
+        return OCRResult(text=paddle_result, engine="paddleocr", engine_available=True)
+
     executable = shutil.which("tesseract")
     if executable is None:
         return OCRResult(text="", engine_available=False, error="tesseract executable not found")
@@ -193,6 +197,24 @@ def extract_text_from_image(image_path: Path, languages: str = "chi_sim+eng") ->
     return OCRResult(text=completed.stdout.strip(), engine_available=True)
 
 
+def _try_paddleocr(image_path: Path) -> str | None:
+    try:
+        from paddleocr import PaddleOCR
+    except ImportError:
+        return None
+    try:
+        ocr = PaddleOCR(use_angle_cls=True, lang="ch", show_log=False)
+        result = ocr.ocr(str(image_path), cls=True)
+        if not result or not result[0]:
+            return ""
+        lines = [line[1][0] for line in result[0] if line and len(line) >= 2]
+        return "\n".join(lines)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).debug("PaddleOCR failed on %s: %s", image_path, exc)
+        return None
+
+
 def read_requirement_from_image(image_path: Path) -> tuple[OCRResult, RequirementResult]:
     ocr = extract_text_from_image(image_path)
     requirement = infer_requirement_from_text(ocr.text)
@@ -206,3 +228,30 @@ def read_requirement_from_image(image_path: Path) -> tuple[OCRResult, Requiremen
             uncertain_fields=[*requirement.uncertain_fields, "ocr_engine"],
         )
     return ocr, requirement
+
+
+def run_structured_reader(
+    image_path: Path,
+    vision_metrics: dict | None = None,
+    candidate_counts: dict | None = None,
+) -> RequirementResult:
+    ocr = extract_text_from_image(image_path)
+    text_result = infer_requirement_from_text(ocr.text)
+
+    if not ocr.engine_available:
+        return RequirementResult(
+            problem_id=text_result.problem_id,
+            task_type=text_result.task_type,
+            target_view=text_result.target_view,
+            section_label=text_result.section_label,
+            confidence=min(text_result.confidence, 0.3),
+            uncertain_fields=[*text_result.uncertain_fields, "ocr_engine"],
+        )
+
+    if ocr.text.strip():
+        return text_result
+
+    return RequirementResult(
+        confidence=0.0,
+        uncertain_fields=["task_type", "problem_id", "ocr_empty"],
+    )

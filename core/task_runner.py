@@ -9,10 +9,11 @@ import sys
 import tempfile
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
 
 from core.geometry_schema import TaskDocument
-from core.quality_gate import run_gate_1_checks, run_gate_2_checks, run_gate_3_checks, run_gate_4_checks
+from core.quality_gate import run_gate_1_checks, run_gate_4_checks
 from core.release_manifest import write_release_manifest
 from core.task_state import TOKEN_SYSTEM_RELEASE_RENDER, TaskState
 from core.vision_pipeline import split_landscape_page_halves, write_gate1_candidate_json
@@ -30,6 +31,7 @@ class TaskRunResult:
 
 @dataclass(frozen=True)
 class PreparedPageResult:
+    package_root: Path
     source_copy: Path
     normalized_image: Path
     task_inputs: list[Path]
@@ -38,38 +40,55 @@ class PreparedPageResult:
 def prepare_two_task_page(
     image_path: Path,
     output_root: Path = Path("result"),
+    date_stamp: str | None = None,
 ) -> PreparedPageResult:
-    source_stem = image_path.stem
-    package_root = output_root / source_stem
-    source_dir = package_root / "source"
-    split_dir = package_root / "split"
+    package_root = build_result_package_dir(image_path, output_root=output_root, date_stamp=date_stamp)
+    temp_root = package_root / "_temp"
+    source_dir = temp_root / "original"
+    split_dir = temp_root / "split"
     source_dir.mkdir(parents=True, exist_ok=True)
     split_dir.mkdir(parents=True, exist_ok=True)
 
     source_copy = source_dir / image_path.name
     shutil.copy2(image_path, source_copy)
 
-    stage_root = Path(tempfile.mkdtemp(prefix=f"diagram_split_{_safe_path_name(source_stem)}_"))
+    stage_root = Path(tempfile.mkdtemp(prefix=f"diagram_split_{_safe_path_name(image_path.stem)}_"))
     try:
-        split = split_landscape_page_halves(image_path, stage_root, output_stem=source_stem)
+        split = split_landscape_page_halves(image_path, stage_root, output_stem=image_path.stem)
         normalized_image = split_dir / split.normalized_image.name
         shutil.copy2(split.normalized_image, normalized_image)
 
         task_inputs: list[Path] = []
-        for task_index, split_image in enumerate(split.task_images, start=25):
-            task_dir = package_root / f"task{task_index}" / "input"
-            task_dir.mkdir(parents=True, exist_ok=True)
-            task_path = task_dir / split_image.name
+        for split_image in split.task_images:
+            task_path = split_dir / split_image.name
             shutil.copy2(split_image, task_path)
             task_inputs.append(task_path)
     finally:
         shutil.rmtree(stage_root, ignore_errors=True)
 
     return PreparedPageResult(
+        package_root=package_root,
         source_copy=source_copy,
         normalized_image=normalized_image,
         task_inputs=task_inputs,
     )
+
+
+def build_result_package_dir(
+    image_path: Path,
+    output_root: Path = Path("result"),
+    date_stamp: str | None = None,
+) -> Path:
+    stamp = date_stamp or _package_date_stamp()
+    return output_root / f"{image_path.stem}_{stamp}"
+
+
+def build_package_temp_root(
+    image_path: Path,
+    output_root: Path = Path("result"),
+    date_stamp: str | None = None,
+) -> Path:
+    return build_result_package_dir(image_path, output_root=output_root, date_stamp=date_stamp) / "_temp"
 
 
 def run_from_geometry(
@@ -80,16 +99,22 @@ def run_from_geometry(
     output_package_dir: Path | None = None,
     review_mark: Path | None = None,
     run_tests: bool = True,
+    state_root: Path = Path("work/state"),
+    audit_root: Path = Path("work/audit_logs"),
 ) -> TaskRunResult:
     payload = json.loads(geometry_json.read_text(encoding="utf-8"))
     task = TaskDocument.model_validate(
         {key: value for key, value in payload.items() if key in TaskDocument.model_fields}
     )
-    state = TaskState(task_id)
+    state = TaskState(task_id, root=state_root, audit_root=audit_root)
     state.assert_gate_can_run("GATE_4")
 
     output_stem = output_basename or task_id
     package_dir = output_package_dir or output_root / output_stem
+    if not package_dir.resolve().is_relative_to(output_root.resolve()):
+        raise ValueError(
+            f"output path escapes output_root: {package_dir} is not under {output_root}"
+        )
     svg_path = package_dir / f"{output_stem}.svg"
     dxf_path = package_dir / f"{output_stem}.dxf"
     png_path = package_dir / f"{output_stem}.png"
@@ -125,6 +150,8 @@ def run_from_geometry(
         [stage_svg_path, stage_dxf_path, stage_png_path, stage_pdf_path, preflight],
         pytest_passed=pytest_passed,
         pytest_summary=pytest_summary,
+        state_root=state_root,
+        audit_root=audit_root,
     )
     if not result.passed:
         _cleanup_stage_dir(stage_dir, stage_root)
@@ -152,6 +179,7 @@ def run_from_geometry(
         output_root=package_dir,
         output_basename=output_stem,
         review_mark=review_mark,
+        state_root=state_root,
     )
     _cleanup_stage_dir(stage_dir, stage_root)
     return TaskRunResult(
@@ -200,16 +228,29 @@ def _make_writable_and_retry(function, path, _exc_info) -> None:
 
 
 def _safe_path_name(value: str) -> str:
-    return "".join(char if char.isalnum() else "_" for char in value)
+    return "".join(char if char.isalnum() or char in ".-_" else "_" for char in value)
+
+
+def _package_date_stamp() -> str:
+    return datetime.now().strftime("%Y%m%d")
 
 
 def run_image_gate_1(
     task_id: str,
     image_path: Path,
     gate1_json: Path | None = None,
+    work_root: Path = Path("work"),
+    state_root: Path = Path("work/state"),
+    audit_root: Path = Path("work/audit_logs"),
 ) -> Path:
-    gate1_json = gate1_json or write_gate1_candidate_json(image_path, task_id)
-    result = run_gate_1_checks(task_id, image_path, gate1_json)
+    gate1_json = gate1_json or write_gate1_candidate_json(image_path, task_id, work_root=work_root)
+    result = run_gate_1_checks(
+        task_id,
+        image_path,
+        gate1_json,
+        state_root=state_root,
+        audit_root=audit_root,
+    )
     if not result.passed:
         raise RuntimeError("; ".join(result.messages))
     return gate1_json

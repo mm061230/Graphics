@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -27,6 +28,13 @@ class GateOrderError(RuntimeError):
 class TaskState:
     task_id: str
     root: Path = Path("work/state")
+    audit_root: Path = Path("work/audit_logs")
+
+    _SAFE_TASK_ID = re.compile(r'^[A-Za-z0-9_-]+$')
+
+    def __post_init__(self) -> None:
+        if not self._SAFE_TASK_ID.match(self.task_id):
+            raise ValueError(f"invalid task_id: {self.task_id!r}")
 
     @property
     def task_dir(self) -> Path:
@@ -71,7 +79,7 @@ class TaskState:
         failure = {"gate": gate, "reason": reason, "timestamp": self._timestamp()}
         state["failures"].append(failure)
         self._write_state(state)
-        report = Path("work/audit_logs") / f"{self.task_id}_{gate.lower()}_failed.md"
+        report = self.audit_root / f"{self.task_id}_{gate.lower()}_failed.md"
         report.parent.mkdir(parents=True, exist_ok=True)
         report.write_text(
             f"# {gate} Failed\n\n"
@@ -95,4 +103,3 @@ class TaskState:
     @staticmethod
     def _timestamp() -> str:
         return datetime.now(timezone.utc).isoformat()
-

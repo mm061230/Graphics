@@ -8,12 +8,11 @@
 
 1. 输入一张图片。
 2. 如果图片里有两个题，先自动拆成两个任务。
-3. `result/` 里只保留用户需要看的内容：
-   - 原图副本
-   - 规范化中间图
-   - 每个任务的输入图
-   - 每个任务的最终交付文件
-4. GATE 1 候选 JSON、状态 token、失败日志、review mark 等内部审计资产都留在 `work/`。
+3. `result/` 里每张图先生成一个日期包目录：`<stem>_<YYYYMMDD>/`
+4. 包目录下只保留：
+   - 一个 `_temp/` 目录
+   - 最终交付文件
+5. 原图、拆分图、中间图、GATE 1 JSON、状态 token、失败日志、review mark 等内部审计资产都留在 `_temp/`。
 
 ## Current Command Set
 
@@ -22,57 +21,54 @@
 当一张横向页面里并排放了两个题，使用：
 
 ```powershell
-python run_task.py --image "input_images/1 (1).jpg" --split-page-halves
+python run_task.py --image "input_images/aa.png" --split-page-halves
 ```
 
 输出目录：
 
 ```text
-result/1 (1)/
-├─ source/
-│  └─ 1 (1).jpg
-├─ split/
-│  └─ 1 (1)_normalized.png
-├─ task25/
-│  └─ input/
-│     └─ 1 (1)_task25.png
-└─ task26/
-   └─ input/
-      └─ 1 (1)_task26.png
+result/aa_20260528/
+└─ _temp/
+   ├─ original/
+   │  └─ aa.png
+   └─ split/
+      ├─ aa_normalized.png
+      ├─ aa_task25.png
+      └─ aa_task26.png
 ```
 
-这一步不会把 GATE 1 JSON、state token、失败日志写进 `result/`。
+这一步不会把内部 gate 审计文件写到包目录根部。
 
 ### 2. 单图或子图执行 GATE 1
 
 ```powershell
-python run_task.py --image "result/1 (1)/task25/input/1 (1)_task25.png" --task-id "1 (1)_task25" --gate GATE_1
+python run_task.py --image "input_images/aa.png" --task-id "aa_task25" --gate GATE_1
 ```
 
-GATE 1 产物写到本地运行目录：
+GATE 1 产物写到对应包目录的 `_temp/`：
 
 ```text
-work/original/
-work/corrected/
-work/enhanced/
-work/geometry_json/
-work/state/
-work/audit_logs/
+result/aa_20260528/_temp/original/
+result/aa_20260528/_temp/corrected/
+result/aa_20260528/_temp/enhanced/
+result/aa_20260528/_temp/geometry_json/
+result/aa_20260528/_temp/state/
+result/aa_20260528/_temp/audit_logs/
 ```
 
 ### 3. 已有几何 JSON 时执行最终 release
 
 ```powershell
-python run_task.py --task-id "1 (1)_task25" --geometry-json "work/geometry_json/1 (1)_task25_manual.json" --gate GATE_4 --output-basename "1 (1)_task25_final" --output-package-dir "result/1 (1)/task25/final"
+python run_task.py --task-id "aa_task25" --geometry-json "result/aa_20260528/_temp/geometry_json/aa_task25_manual.json" --gate GATE_4 --output-basename "aa_task25_final"
 ```
 
 ## Result Directory Rules
 
-- `result/` 是用户可见目录，不放内部 gate 审计垃圾。
-- `work/` 是内部运行目录，允许放中间 JSON、日志、token、review mark。
-- 一个源图一个目录。
-- 一个任务一个 `input/` 和一个 `final/`。
-- 双题页拆分后，`split/` 只保留规范化中间图，不重复堆拆分子图。
+- `result/` 是用户可见目录。
+- 一个源图一个日期包目录。
+- 包目录根部只放 `_temp/` 和最终交付文件。
+- `_temp/` 是内部运行目录，允许放中间 JSON、日志、token、review mark。
+- 双题页拆分后，拆分子图和规范化图都放 `_temp/split/`。
 
 ## Current Boundary
 

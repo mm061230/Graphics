@@ -9,6 +9,15 @@ import cv2
 import numpy as np
 
 from core.geometry_schema import TaskDocument
+from core import ALLOWED_IMAGE_SUFFIXES
+
+
+def _validate_image_suffix(path: Path) -> None:
+    if path.suffix.lower() not in ALLOWED_IMAGE_SUFFIXES:
+        raise ValueError(
+            f"unsupported image format: {path.suffix!r}. "
+            f"Allowed: {sorted(ALLOWED_IMAGE_SUFFIXES)}"
+        )
 
 
 @dataclass(frozen=True)
@@ -129,6 +138,7 @@ def process_image(
 ) -> VisionResult:
     if not image_path.exists():
         raise FileNotFoundError(f"input image does not exist: {image_path}")
+    _validate_image_suffix(image_path)
 
     original_dir = work_root / "original"
     corrected_dir = work_root / "corrected"

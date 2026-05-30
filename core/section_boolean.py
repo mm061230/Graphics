@@ -119,9 +119,23 @@ def generate_hatch_segments(
     spacing: float = 6.0,
     angle_degrees: float = 45.0,
 ) -> list[tuple[float, float, float, float]]:
-    if angle_degrees != 45.0:
-        raise NotImplementedError("only 45 degree hatch generation is currently supported")
+    if angle_degrees <= 0.0 or angle_degrees >= 180.0:
+        raise ValueError("angle_degrees must be strictly between 0 and 180")
+    if angle_degrees == 90.0:
+        raise ValueError("angle_degrees must not be 90 (vertical lines not supported)")
 
+    angle_rad = math.radians(angle_degrees)
+
+    if angle_degrees == 45.0:
+        return _generate_hatch_45(material_region, spacing)
+
+    centroid = material_region.centroid
+    rotated = _affine_rotate(material_region, -angle_rad, origin=(centroid.x, centroid.y))
+    horizontal_segments = _generate_hatch_horizontal(rotated, spacing)
+    return _rotate_segments_back(horizontal_segments, angle_rad, origin=(centroid.x, centroid.y))
+
+
+def _generate_hatch_45(material_region, spacing: float) -> list[tuple[float, float, float, float]]:
     minx, miny, maxx, maxy = material_region.bounds
     span = (maxx - minx) + (maxy - miny) + spacing * 4
     start = int((miny - maxx - span) // spacing) * spacing
@@ -135,6 +149,50 @@ def generate_hatch_segments(
         segments.extend(_segments_from_geometry(clipped))
         offset += spacing
     return segments
+
+
+def _generate_hatch_horizontal(material_region, spacing: float) -> list[tuple[float, float, float, float]]:
+    minx, miny, maxx, maxy = material_region.bounds
+    margin = spacing * 2
+
+    start_y = math.floor((miny - margin) / spacing) * spacing
+    end_y = math.ceil((maxy + margin) / spacing) * spacing
+
+    segments: list[tuple[float, float, float, float]] = []
+    y = start_y
+    while y <= end_y:
+        candidate = LineString([(minx - margin, y), (maxx + margin, y)])
+        clipped = candidate.intersection(material_region)
+        segments.extend(_segments_from_geometry(clipped))
+        y += spacing
+    return segments
+
+
+def _affine_rotate(geometry, angle_rad: float, origin: tuple[float, float]):
+    from shapely.affinity import rotate
+
+    return rotate(geometry, math.degrees(angle_rad), origin=origin, use_radians=False)
+
+
+def _rotate_segments_back(
+    segments: list[tuple[float, float, float, float]],
+    angle_rad: float,
+    origin: tuple[float, float],
+) -> list[tuple[float, float, float, float]]:
+    ox, oy = origin
+    cos_a = math.cos(angle_rad)
+    sin_a = math.sin(angle_rad)
+
+    result: list[tuple[float, float, float, float]] = []
+    for x1, y1, x2, y2 in segments:
+        dx1, dy1 = x1 - ox, y1 - oy
+        rx1 = dx1 * cos_a - dy1 * sin_a + ox
+        ry1 = dx1 * sin_a + dy1 * cos_a + oy
+        dx2, dy2 = x2 - ox, y2 - oy
+        rx2 = dx2 * cos_a - dy2 * sin_a + ox
+        ry2 = dx2 * sin_a + dy2 * cos_a + oy
+        result.append((rx1, ry1, rx2, ry2))
+    return result
 
 
 def compute_section_hatching(

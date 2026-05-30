@@ -22,8 +22,14 @@ class GateResult:
     messages: list[str] = field(default_factory=list)
 
 
-def run_gate_1_checks(task_id: str, image_path: Path, geometry_json_path: Path) -> GateResult:
-    state = TaskState(task_id)
+def run_gate_1_checks(
+    task_id: str,
+    image_path: Path,
+    geometry_json_path: Path,
+    state_root: Path = Path("work/state"),
+    audit_root: Path = Path("work/audit_logs"),
+) -> GateResult:
+    state = TaskState(task_id, root=state_root, audit_root=audit_root)
     state.assert_gate_can_run("GATE_1")
 
     messages: list[str] = []
@@ -46,8 +52,14 @@ def run_gate_1_checks(task_id: str, image_path: Path, geometry_json_path: Path) 
     return GateResult("GATE_1", True, messages)
 
 
-def run_gate_2_checks(task_id: str, gate2_json_path: Path, tolerance: float = 0.0) -> GateResult:
-    state = TaskState(task_id)
+def run_gate_2_checks(
+    task_id: str,
+    gate2_json_path: Path,
+    tolerance: float = 0.0,
+    state_root: Path = Path("work/state"),
+    audit_root: Path = Path("work/audit_logs"),
+) -> GateResult:
+    state = TaskState(task_id, root=state_root, audit_root=audit_root)
     try:
         state.assert_gate_can_run("GATE_2")
     except Exception as exc:
@@ -86,8 +98,13 @@ def run_gate_2_checks(task_id: str, gate2_json_path: Path, tolerance: float = 0.
     return GateResult("GATE_2", True, [f"{name}={value}" for name, value in errors.items()])
 
 
-def run_gate_3_checks(task_id: str, gate3_json_path: Path) -> GateResult:
-    state = TaskState(task_id)
+def run_gate_3_checks(
+    task_id: str,
+    gate3_json_path: Path,
+    state_root: Path = Path("work/state"),
+    audit_root: Path = Path("work/audit_logs"),
+) -> GateResult:
+    state = TaskState(task_id, root=state_root, audit_root=audit_root)
     try:
         state.assert_gate_can_run("GATE_3")
     except Exception as exc:
@@ -127,8 +144,10 @@ def run_gate_4_checks(
     output_files: list[Path],
     pytest_passed: bool | None = None,
     pytest_summary: str | None = None,
+    state_root: Path = Path("work/state"),
+    audit_root: Path = Path("work/audit_logs"),
 ) -> GateResult:
-    state = TaskState(task_id)
+    state = TaskState(task_id, root=state_root, audit_root=audit_root)
     try:
         state.assert_gate_can_run("GATE_4")
     except Exception as exc:

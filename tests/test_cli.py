@@ -2,6 +2,7 @@ import json
 import os
 import subprocess
 import sys
+from datetime import datetime
 from pathlib import Path
 
 from core.task_state import TOKEN_GEOM_EXTRACT_PASS, TOKEN_PROJ_ALIGN_PASS, TOKEN_TOPO_SECTION_PASS, TaskState
@@ -213,8 +214,42 @@ def test_cli_can_prepare_two_task_page(tmp_path: Path, monkeypatch):
     )
 
     assert completed.returncode == 0
-    assert (tmp_path / "result/page/source/page.png").exists()
-    assert (tmp_path / "result/page/split/page_normalized.png").exists()
-    assert (tmp_path / "result/page/task25/input/page_task25.png").exists()
-    assert (tmp_path / "result/page/task26/input/page_task26.png").exists()
-    assert not (tmp_path / "result/page/split/page_task25.png").exists()
+    package_dir = tmp_path / "result" / f"page_{datetime.now().strftime('%Y%m%d')}"
+    assert (package_dir / "_temp/original/page.png").exists()
+    assert (package_dir / "_temp/split/page_normalized.png").exists()
+    assert (package_dir / "_temp/split/page_task25.png").exists()
+    assert (package_dir / "_temp/split/page_task26.png").exists()
+    assert not (package_dir / "task25").exists()
+
+
+def test_cli_gate_1_uses_package_temp_directory(tmp_path: Path, monkeypatch):
+    from tests.test_gate_1_input import create_sample_image
+
+    monkeypatch.chdir(tmp_path)
+    image = create_sample_image(tmp_path / "aa.png")
+
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(PROJECT_ROOT / "run_task.py"),
+            "--image",
+            str(image),
+            "--task-id",
+            "aa_task25",
+            "--gate",
+            "GATE_1",
+        ],
+        cwd=tmp_path,
+        env=os.environ | {"PYTHONPATH": str(PROJECT_ROOT)},
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert completed.returncode == 0
+    package_dir = tmp_path / "result" / f"aa_{datetime.now().strftime('%Y%m%d')}"
+    assert (package_dir / "_temp/original/aa_task25.png").exists()
+    assert (package_dir / "_temp/corrected/aa_task25_corrected.png").exists()
+    assert (package_dir / "_temp/enhanced/aa_task25_enhanced.png").exists()
+    assert (package_dir / "_temp/geometry_json/aa_task25_gate1.json").exists()
+    assert (package_dir / "_temp/state/aa_task25/TOKEN_GEOM_EXTRACT_PASS").exists()
